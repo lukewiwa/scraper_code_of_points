@@ -4,6 +4,7 @@ import itertools
 import csv
 import string
 import time
+import argparse
 
 
 class Code:
@@ -195,14 +196,20 @@ class Code:
                         'image_path' : image,
                     })
 
+    def write_csv(self):
+        with open('skills.csv', 'w', encoding='utf-8') as csvfile:
+            fieldnames = ['app', 'value', 'EG', 'number', 'description', 'image_path']
+            write = csv.DictWriter(csvfile, fieldnames=fieldnames, lineterminator='\n')
+            write.writeheader()
+            write.writerows(self.getSkills())
 
 if __name__ == "__main__":
-    code = Code("CoP_MAG_2017-2020_ICI-e.xml")
+    ap = argparse.ArgumentParser(description="Scrape the Code of Points")
+    ap.add_argument("-f", help="Specify XML file to be scraped", required=False)
+    args = ap.parse_args()
 
-    with open('skills.csv', 'w', encoding='utf-8') as csvfile:
-        fieldnames = ['app', 'value', 'EG', 'number', 'description', 'image_path']
-        write = csv.DictWriter(csvfile, fieldnames=fieldnames, lineterminator='\n')
-        write.writeheader()
-        write.writerows(code.getSkills())
+    if args.f:
+        code = Code(args.f)
+        code.write_csv()
 
 
