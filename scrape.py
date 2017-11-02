@@ -17,7 +17,7 @@ class Code:
     )
 
     # Important grid co ordinates
-    xCoords= [
+    xCoords = [
         (10, 70, 'A'),
         (100, 350, 'B'),
         (400, 550, 'C'),
