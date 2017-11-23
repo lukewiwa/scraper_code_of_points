@@ -1,2 +1,6 @@
 venv
 
+
+.vscode
+.cache
+__pycache__

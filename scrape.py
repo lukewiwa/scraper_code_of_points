@@ -1,23 +1,21 @@
-import lxml.etree as ET
 import re
 import itertools
 import csv
-import string
-import time
 import argparse
+import lxml.etree as ET
 
 
 class Code:
     # initiate parser
     parser = ET.XMLParser(
-        remove_blank_text = True,
-        ns_clean = True,
-        encoding = 'utf-8',
-        recover = True,
+        remove_blank_text=True,
+        ns_clean=True,
+        encoding='utf-8',
+        recover=True,
     )
 
     # Important grid co ordinates
-    xCoords= [
+    xCoords = [
         (10, 70, 'A'),
         (100, 350, 'B'),
         (400, 550, 'C'),
@@ -31,7 +29,7 @@ class Code:
         (465, 647),
         (657, 840),
     ]
-    xyCoords = list(itertools.product(xCoords,yCoords))
+    xyCoords = list(itertools.product(xCoords, yCoords))
 
     # Other important information like element groups and titles
     elemGroupCoord = [(20, 44), (60, 90)]
@@ -80,7 +78,7 @@ class Code:
         return path
 
     def getGH(self, element):
-        GH = False
+        GH = None
         for item in element:
             bold = item.xpath('b/text()')
             if bold:
@@ -211,5 +209,3 @@ if __name__ == "__main__":
     if args.f:
         code = Code(args.f)
         code.write_csv()
-
-
