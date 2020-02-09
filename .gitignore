@@ -1,6 +1,7 @@
-venv
-
+.venv
 
 .vscode
 .cache
 __pycache__
+
+skills.csv
