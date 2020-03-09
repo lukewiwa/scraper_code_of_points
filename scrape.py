@@ -27,19 +27,18 @@ class Code:
         (465, 647),
         (657, 840),
     ]
-    xy_coords = tuple(itertools.product(x_coords, y_coords))
 
     # Other important information like element groups and titles
-    elemGroupCoord = [(20, 44), (60, 90)]
-    elemGroup = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
-    apparatusCoord = [(450, 500), (90, 110)]
+    element_group_coord = [(20, 44), (60, 90)]
+    element_group = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
+    apparatus_coord = [(450, 500), (90, 110)]
 
     # The regex patterns needed for all functions
-    RomNumRegex = r"([MDCLXVI]+)"
-    numRegex = r"([0-9]+)(?=\.)"
-    GHRegex = r"\b(G|H)\b"
-    vaultRegex = r"([0-9]\.[0-9])"
-    appRegex = (
+    roman_numeral_regex = r"([MDCLXVI]+)"
+    number_regex = r"([0-9]+)(?=\.)"
+    GH_regex = r"\b(G|H)\b"
+    vault_regex = r"([0-9]\.[0-9])"
+    apparatus_regex = (
         r"(?<=section\s[0-9][0-9]:)\s*("
         "floor exercise|"
         "pommel horse|"
@@ -57,10 +56,14 @@ class Code:
         self.root = self.tree.getroot()
         self.pages = self.root.xpath("page")
 
+    async def xy_coords(self):
+        for coord in itertools.product(self.x_coords, self.y_coords):
+            yield coord
+
     # a function to get the path to all elements in a grid box
-    async def element_path(self, xyCoord):
-        x1, x2, *_ = xyCoord[0]
-        y1, y2, *_ = xyCoord[1]
+    async def element_path(self, xy_coord) -> str:
+        x1, x2, *_ = xy_coord[0]
+        y1, y2, *_ = xy_coord[1]
         path = (
             '*[@left > "{}" and '
             '@left < "{}" and '
@@ -74,14 +77,14 @@ class Code:
         for item in element:
             bold = item.xpath("b/text()")
             if bold:
-                pattern = self.GHRegex
+                pattern = self.GH_regex
                 GH = re.search(pattern, bold[0])
                 if GH:
                     GH = GH.group(0)
                     break
         return GH
 
-    async def get_name(self, element):
+    async def get_name(self, element) -> str:
         name = ""
         for item in element:
             italics = item.xpath("i/text()")
@@ -93,35 +96,35 @@ class Code:
         name = name.strip()
         return name
 
-    async def get_number(self, element):
+    async def get_number(self, element) -> str:
         number = ""
         for item in element:
-            pattern = self.numRegex
-            itemTxt = str(item.text)
-            result = re.search(pattern, itemTxt)
+            pattern = self.number_regex
+            item_text = str(item.text)
+            result = re.search(pattern, item_text)
             if result:
                 number = int(result.group(0))
                 break
         return number
 
     async def get_elem_group(self, page):
-        path = await self.element_path(self.elemGroupCoord)
+        path = await self.element_path(self.element_group_coord)
         try:
-            EGdescription = page.xpath(f"{path}/b/text()")[0]
-            pattern = self.RomNumRegex
-            EG = re.search(pattern, EGdescription)
+            EG_description = page.xpath(f"{path}/b/text()")[0]
+            pattern = self.roman_numeral_regex
+            EG = re.search(pattern, EG_description)
             EG = EG.group(0)
-            if EG in self.elemGroup:
-                return self.elemGroup[EG]
+            if EG in self.element_group:
+                return self.element_group[EG]
         except (AttributeError, IndexError):
             return False
 
     async def get_apparatus(self, page):
-        path = await self.element_path(self.apparatusCoord)
+        path = await self.element_path(self.apparatus_coord)
         try:
-            appSection = page.xpath("{}/b/text()".format(path))[0]
-            pattern = self.appRegex
-            apparatus = re.search(pattern, appSection, flags=re.I)
+            apparatus_section = page.xpath("{}/b/text()".format(path))[0]
+            pattern = self.apparatus_regex
+            apparatus = re.search(pattern, apparatus_section, flags=re.I)
             if apparatus:
                 apparatus = apparatus.group(0)
                 apparatus = apparatus.strip()
@@ -129,20 +132,18 @@ class Code:
         except (IndexError, AttributeError):
             return False
 
-    async def get_vault(self, element):
-        vaultVal = ""
+    async def get_vault_value(self, element):
+        value = ""
         for item in element:
             try:
-                bold = item.xpath("b/text()")
-                if bold:
-                    pattern = self.vaultRegex
-                    vaultVal = re.search(pattern, bold[0])
-                    if vaultVal:
-                        vaultVal = vaultVal.group(0)
+                if bold := item.xpath("b/text()"):
+                    pattern = self.vault_regex
+                    if value := re.search(pattern, bold[0]):
+                        value = value.group(0)
                         break
             except IndexError:
                 continue
-        return vaultVal
+        return value
 
     async def get_img(self, element):
         image = ""
@@ -155,8 +156,8 @@ class Code:
 
     async def get_skills(self):
         current_apparatus = ""
-        for i, page in enumerate(self.pages):
-            print("processing page {}".format(i))
+        for page in self.pages:
+            # print("processing page {}".format(i))
             EG, page_apparatus = await asyncio.gather(
                 self.get_elem_group(page), self.get_apparatus(page)
             )
@@ -166,12 +167,12 @@ class Code:
                 current_apparatus = page_apparatus
                 continue
 
-            for xy in self.xy_coords:
+            async for xy in self.xy_coords():
                 path = await self.element_path(xy)
                 elem = page.xpath(path)
                 if value := await self.get_GH(elem):
                     pass
-                elif value := await self.get_vault(elem):
+                elif value := await self.get_vault_value(elem):
                     pass
                 else:
                     value = xy[0][2]
