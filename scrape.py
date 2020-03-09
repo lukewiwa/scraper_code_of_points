@@ -1,3 +1,4 @@
+import asyncio
 import re
 import itertools
 import csv
@@ -12,7 +13,7 @@ class Code:
     )
 
     # Important grid co ordinates
-    xCoords = [
+    x_coords = [
         (10, 70, "A"),
         (100, 350, "B"),
         (400, 550, "C"),
@@ -20,18 +21,18 @@ class Code:
         (800, 950, "E"),
         (1000, 1250, "F"),
     ]
-    yCoords = [
+    y_coords = [
         (90, 265),
         (272, 455),
         (465, 647),
         (657, 840),
     ]
-    xyCoords = list(itertools.product(xCoords, yCoords))
+    xy_coords = tuple(itertools.product(x_coords, y_coords))
 
     # Other important information like element groups and titles
     elemGroupCoord = [(20, 44), (60, 90)]
     elemGroup = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
-    appNameCoord = [(450, 500), (90, 110)]
+    apparatusCoord = [(450, 500), (90, 110)]
 
     # The regex patterns needed for all functions
     RomNumRegex = r"([MDCLXVI]+)"
@@ -57,7 +58,7 @@ class Code:
         self.pages = self.root.xpath("page")
 
     # a function to get the path to all elements in a grid box
-    def elementPath(self, xyCoord):
+    async def element_path(self, xyCoord):
         x1, x2, *_ = xyCoord[0]
         y1, y2, *_ = xyCoord[1]
         path = (
@@ -68,7 +69,7 @@ class Code:
         )
         return path
 
-    def getGH(self, element):
+    async def get_GH(self, element):
         GH = None
         for item in element:
             bold = item.xpath("b/text()")
@@ -80,7 +81,7 @@ class Code:
                     break
         return GH
 
-    def getName(self, element):
+    async def get_name(self, element):
         name = ""
         for item in element:
             italics = item.xpath("i/text()")
@@ -92,7 +93,7 @@ class Code:
         name = name.strip()
         return name
 
-    def getNumber(self, element):
+    async def get_number(self, element):
         number = ""
         for item in element:
             pattern = self.numRegex
@@ -103,10 +104,10 @@ class Code:
                 break
         return number
 
-    def getElemGroup(self, page):
-        path = self.elementPath(self.elemGroupCoord)
+    async def get_elem_group(self, page):
+        path = await self.element_path(self.elemGroupCoord)
         try:
-            EGdescription = page.xpath("{}/b/text()".format(path))[0]
+            EGdescription = page.xpath(f"{path}/b/text()")[0]
             pattern = self.RomNumRegex
             EG = re.search(pattern, EGdescription)
             EG = EG.group(0)
@@ -115,20 +116,20 @@ class Code:
         except (AttributeError, IndexError):
             return False
 
-    def getApp(self, page):
-        path = self.elementPath(self.appNameCoord)
+    async def get_apparatus(self, page):
+        path = await self.element_path(self.apparatusCoord)
         try:
             appSection = page.xpath("{}/b/text()".format(path))[0]
             pattern = self.appRegex
-            appName = re.search(pattern, appSection, flags=re.I)
-            if appName:
-                appName = appName.group(0)
-                appName = appName.strip()
-                return appName
+            apparatus = re.search(pattern, appSection, flags=re.I)
+            if apparatus:
+                apparatus = apparatus.group(0)
+                apparatus = apparatus.strip()
+                return apparatus
         except (IndexError, AttributeError):
             return False
 
-    def getVault(self, element):
+    async def get_vault(self, element):
         vaultVal = ""
         for item in element:
             try:
@@ -143,7 +144,7 @@ class Code:
                 continue
         return vaultVal
 
-    def get_img(self, element):
+    async def get_img(self, element):
         image = ""
         for item in element:
             if item.tag == "image":
@@ -152,33 +153,35 @@ class Code:
                 break
         return image
 
-    def getSkills(self):
-        appName = ""
+    async def get_skills(self):
+        current_apparatus = ""
         for i, page in enumerate(self.pages):
             print("processing page {}".format(i))
-            if not self.getElemGroup(page) and not self.getApp(page):
+            EG, page_apparatus = await asyncio.gather(
+                self.get_elem_group(page), self.get_apparatus(page)
+            )
+            if not EG and not page_apparatus:
                 continue
-            elif self.getApp(page):
-                appName = self.getApp(page)
+            elif page_apparatus:
+                current_apparatus = page_apparatus
                 continue
-            else:
-                EG = self.getElemGroup(page)
-            for xy in self.xyCoords:
-                path = self.elementPath(xy)
+
+            for xy in self.xy_coords:
+                path = await self.element_path(xy)
                 elem = page.xpath(path)
-                if self.getGH(elem):
-                    value = self.getGH(elem)
-                elif self.getVault(elem):
-                    value = self.getVault(elem)
+                if value := await self.get_GH(elem):
+                    pass
+                elif value := await self.get_vault(elem):
+                    pass
                 else:
                     value = xy[0][2]
-                if self.getName(elem):
-                    image = self.get_img(elem)
-                    number = self.getNumber(elem)
-                    name = self.getName(elem)
+                if name := await self.get_name(elem):
+                    image, number = await asyncio.gather(
+                        self.get_img(elem), self.get_number(elem)
+                    )
                     yield (
                         {
-                            "app": appName,
+                            "app": current_apparatus,
                             "value": value,
                             "EG": EG,
                             "number": number,
@@ -187,19 +190,20 @@ class Code:
                         }
                     )
 
-    def write_csv(self):
+    async def write_csv(self):
         with open("skills.csv", "w", encoding="utf-8") as csvfile:
             fieldnames = ["app", "value", "EG", "number", "description", "image_path"]
             write = csv.DictWriter(csvfile, fieldnames=fieldnames, lineterminator="\n")
             write.writeheader()
-            write.writerows(self.getSkills())
+            skills = [i async for i in self.get_skills()]
+            write.writerows(skills)
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Scrape the Code of Points")
-    ap.add_argument("-f", help="Specify XML file to be scraped", required=False)
+    ap.add_argument("-f", help="Specify XML file to be scraped", required=True)
     args = ap.parse_args()
 
     if args.f:
         code = Code(args.f)
-        code.write_csv()
+        asyncio.run(code.write_csv())
